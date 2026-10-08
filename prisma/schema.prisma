@@ -1,0 +1,346 @@
+// DND Tracker schema — Postgres.
+// Note: `Entity.type` / `InventoryItem.location` remain plain strings
+// (validated in app code) to minimize churn from the earlier SQLite schema.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+
+  accounts       Account[]
+  sessions       Session[]
+  memberships    CampaignMembership[]
+  characters     Character[]
+  ownedCampaigns Campaign[]           @relation("CampaignOwner")
+  notes          Note[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+enum MembershipRole {
+  OWNER
+  MEMBER
+}
+
+model CampaignMembership {
+  id         String         @id @default(cuid())
+  campaignId String
+  userId     String
+  role       MembershipRole @default(MEMBER)
+  joinedAt   DateTime       @default(now())
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, userId])
+}
+
+model Campaign {
+  id                 String   @id @default(cuid())
+  name               String
+  createdAt          DateTime @default(now())
+  // max weight (lbs) each can carry
+  carryCapacitySelf  Float    @default(150)
+  carryCapacityHorse Float    @default(480)
+
+  ownerId    String
+  owner      User   @relation("CampaignOwner", fields: [ownerId], references: [id])
+  inviteCode String @unique @default(cuid())
+
+  memberships    CampaignMembership[]
+  notes          Note[]
+  entities       Entity[]
+  inventory      InventoryItem[]
+  itemTemplates  ItemTemplate[]
+  spellTemplates SpellTemplate[]
+  characters     Character[]
+}
+
+model Note {
+  id         String   @id @default(cuid())
+  title      String   @default("Untitled")
+  body       String   @default("")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  authorId String?
+  author   User?   @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  // entities mentioned via [[ ]] (( )) {{ }} in the body
+  links Entity[] @relation("NoteEntities")
+}
+
+model Entity {
+  id          String   @id @default(cuid())
+  name        String
+  type        String // CHARACTER | PLACE | ITEM
+  description String   @default("")
+  details     String   @default("") // freeform extra info to fill in later
+  createdAt   DateTime @default(now())
+
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  notes Note[] @relation("NoteEntities")
+
+  // one entity per (campaign, type, name) so parsing can upsert safely
+  @@unique([campaignId, type, name])
+}
+
+model Character {
+  id                String   @id @default(cuid())
+  name              String   @default("")
+  className         String   @default("")
+  background        String   @default("")
+  alignment         String   @default("")
+  experiencePoints  Int      @default(0)
+  level             Int      @default(1)
+
+  initiative        Int      @default(0)
+  armorClass        Int      @default(10)
+  speed             Int      @default(30)
+  passivePerception Int      @default(10)
+  proficiencyBonus  Int      @default(2)
+
+  hitDice           String   @default("")
+  maxHp             Int      @default(0)
+  tempHp            Int      @default(0)
+  currentHp         Int      @default(0)
+
+  // death saving throws: 0-3 each
+  deathSaveSuccesses Int @default(0)
+  deathSaveFailures  Int @default(0)
+
+  // coin purse
+  platinum Int @default(0)
+  gold     Int @default(0)
+  electrum Int @default(0)
+  silver   Int @default(0)
+  copper   Int @default(0)
+
+  // ability scores (3-20); modifier is derived in app code
+  strength          Int      @default(10)
+  dexterity         Int      @default(10)
+  constitution      Int      @default(10)
+  intelligence      Int      @default(10)
+  wisdom            Int      @default(10)
+  charisma          Int      @default(10)
+
+  // spellcasting
+  spellcastingAbility String @default("") // e.g. "wisdom", "charisma"
+  spellSaveDc         Int    @default(0)
+  spellAttackBonus    String @default("") // e.g. "+5"
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  languages     CharacterLanguage[]
+  proficiencies CharacterProficiency[]
+  features      CharacterFeature[]
+  savingThrows  SavingThrow[]
+  skills        Skill[]
+  attacks       Attack[]
+  spells        Spell[]
+  spellSlots    SpellSlot[]
+
+  @@unique([campaignId, userId])
+}
+
+model CharacterLanguage {
+  id   String @id @default(cuid())
+  name String
+
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+}
+
+model CharacterProficiency {
+  id   String @id @default(cuid())
+  name String
+
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+}
+
+model CharacterFeature {
+  id          String @id @default(cuid())
+  name        String
+  description String @default("")
+
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+}
+
+model SavingThrow {
+  id    String @id @default(cuid())
+  name  String
+  value Int    @default(0)
+
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+}
+
+model Skill {
+  id    String @id @default(cuid())
+  name  String
+  value Int    @default(0)
+
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+}
+
+model Attack {
+  id          String @id @default(cuid())
+  name        String
+  attackBonus String @default("") // e.g. "+5"
+  damage      String @default("") // e.g. "1d8+3"
+  type        String @default("") // e.g. "Slashing", "Fire", "Force"
+
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+}
+
+model Spell {
+  id          String  @id @default(cuid())
+  name        String
+  level       Int     @default(0) // 0 = cantrip, 1-9
+  description String  @default("")
+  range       String  @default("")
+  castingTime String  @default("") // e.g. "Action", "Bonus Action", "1 minute"
+  duration    String  @default("") // e.g. "Instantaneous", "1 hour", "Until dispelled"
+
+  concentration Boolean @default(false)
+  ritual        Boolean @default(false)
+
+  verbal   Boolean @default(false)
+  somatic  Boolean @default(false)
+  material Boolean @default(false)
+  materialDescription String @default("") // what material is required, if any
+
+  notes String @default("")
+
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+}
+
+model SpellSlot {
+  id    String @id @default(cuid())
+  level Int // 1-9
+  total Int    @default(0)
+  used  Int    @default(0)
+
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  @@unique([characterId, level])
+}
+
+model InventoryItem {
+  id          String @id @default(cuid())
+  name        String
+  description String @default("")
+  worth       Float  @default(0) // gp, per unit
+  weightLbs   Float  @default(0) // lbs, per unit
+  quantity    Int    @default(1)
+  location    String @default("SELF") // SELF | HORSE
+
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+}
+
+// Remembered item info so a removed item's details (worth/weight/description)
+// can be re-added later without retyping them.
+model ItemTemplate {
+  id          String @id @default(cuid())
+  name        String
+  description String @default("")
+  worth       Float  @default(0)
+  weightLbs   Float  @default(0)
+
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, name])
+}
+
+// Remembered spell info so a removed spell's details can be re-added later
+// without retyping them.
+model SpellTemplate {
+  id          String  @id @default(cuid())
+  name        String
+  level       Int     @default(0)
+  description String  @default("")
+  range       String  @default("")
+  castingTime String  @default("")
+  duration    String  @default("")
+
+  concentration Boolean @default(false)
+  ritual        Boolean @default(false)
+
+  verbal   Boolean @default(false)
+  somatic  Boolean @default(false)
+  material Boolean @default(false)
+  materialDescription String @default("")
+
+  notes String @default("")
+
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, name])
+}

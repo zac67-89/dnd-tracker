@@ -1,36 +1,64 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ⚔️ DND Tracker
 
-## Getting Started
+A local web app to track D&D session notes, lore, and equipment. Each person runs
+their own copy with their own SQLite database file — no accounts, no server to host.
 
-First, run the development server:
+## Features
+
+- **Session notes** — write your story; tag entities inline:
+  - `[[Volo]]` → a **Character**
+  - `((Neverwinter))` → a **Place**
+  - `{{Rusty Dagger}}` → an **Item**
+- Tagged entities auto-appear under the **Characters / Places / Items** tabs, where you
+  fill in descriptions and details. Click a chip in a note to jump to its page.
+- **Equipment tracker** — worth, weight, quantity, and whether each item is on **you**
+  or on your **horse**. Live weight totals vs. carry capacity, with an over-encumbered
+  warning. Total inventory worth shown too.
+- **Campaigns** — keep separate campaigns side by side.
+
+## Requirements
+
+- [Node.js](https://nodejs.org) 18+ (you have 24 ✓)
+
+## First-time setup
+
+From this folder:
+
+```bash
+npm install
+npx prisma migrate dev --name init
+```
+
+That creates the database (`prisma/dev.db`).
+
+## Run it (recommended: production mode)
+
+Production mode is light on memory and is what you'll use to actually play:
+
+```bash
+npm run build
+npm run start
+```
+
+Open http://localhost:3000 . After changing code, run `npm run build` again.
+
+> **Low on RAM?** This machine has ~2–3 GB free, and `npm run dev` (hot-reload
+> mode) can use 1–2 GB and crash with "JavaScript heap out of memory". Use
+> `build` + `start` instead — it uses ~200 MB. Only use `dev` (below) while
+> actively editing code, and close other apps first.
+
+## Dev mode (only while editing code)
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Notes
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- Your data lives in `prisma/dev.db` — back that file up to keep your campaigns.
+- To reset everything, delete `prisma/dev.db` and re-run `npx prisma migrate dev`.
+- Finance tracking is a planned addition (schema leaves room for it).
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Stack
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Next.js (App Router) · SQLite via Prisma · Tailwind CSS · TypeScript
